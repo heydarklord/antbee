@@ -397,7 +397,7 @@ export default function EndpointDetailsPage({ params }: { params: Promise<{ id: 
                                 value={bodyString}
                                 onChange={setBodyString}
                                 className="h-full border-none rounded-none bg-transparent"
-                                error={jsonError}
+                                error={!!jsonError}
                             />
                         ) : (
                             <RequestLogs endpointId={id} />

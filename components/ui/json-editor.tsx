@@ -2,11 +2,11 @@
 
 import React from 'react'
 import Editor from 'react-simple-code-editor'
-import { highlight, languages } from 'prismjs/components/prism-core'
+import { highlight, languages } from 'prismjs'
 import 'prismjs/components/prism-clike'
 import 'prismjs/components/prism-javascript'
 import 'prismjs/components/prism-json'
-import '@/components/ui/prism-theme.css' // We will create this next
+import '@/components/ui/prism-theme.css'
 import { cn } from '@/lib/utils'
 
 interface JsonEditorProps {
@@ -18,8 +18,9 @@ interface JsonEditorProps {
 }
 
 export function JsonEditor({ value, onChange, className, readOnly, error }: JsonEditorProps) {
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        const { selectionStart, selectionEnd, value } = e.currentTarget;
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        const target = e.currentTarget as HTMLTextAreaElement;
+        const { selectionStart, selectionEnd, value } = target;
 
         const pairs: Record<string, string> = {
             '{': '}',
@@ -45,7 +46,6 @@ export function JsonEditor({ value, onChange, className, readOnly, error }: Json
             // before the state update flushes.
             // However, referencing the current target in a timeout is safer.
 
-            const target = e.currentTarget;
             setTimeout(() => {
                 target.selectionStart = selectionStart + 1;
                 target.selectionEnd = selectionEnd + 1;
