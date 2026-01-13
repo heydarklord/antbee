@@ -6,6 +6,8 @@ import { Activity, BarChart3, Clock, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState } from 'react'
 
+import { format, subHours, parseISO, startOfHour } from 'date-fns'
+
 export default function DashboardPage() {
     const [stats, setStats] = useState({
         totalRequests: 0,
@@ -31,7 +33,12 @@ export default function DashboardPage() {
                     errorRate: 2.5,
                     avgLatency: 145
                 })
-                setChartData([])
+                // Generate mock chart data
+                const mockData = Array.from({ length: 24 }).map((_, i) => ({
+                    time: format(subHours(new Date(), 23 - i), 'HH:mm'),
+                    requests: Math.floor(Math.random() * 50) + 10
+                }))
+                setChartData(mockData)
                 setLoading(false)
                 return
             }
@@ -42,23 +49,60 @@ export default function DashboardPage() {
                 .select('*', { count: 'exact', head: true })
                 .eq('is_active', true)
 
-            // 2. Request stats
-            // Fetch validation: limit to last 1000 to calculate avg latency/error rate clientside for MVP
+            // 2. Request stats (Last 24h limit)
             const { data: recentLogs, count: totalRequests } = await supabase
                 .from('request_logs')
-                .select('status_code, duration_ms', { count: 'exact' })
+                .select('status_code, duration_ms, created_at', { count: 'exact' })
                 .order('created_at', { ascending: false })
                 .limit(1000)
 
             let errorRate = 0
             let avgLatency = 0
+            let volumeData: { time: string, requests: number }[] = []
 
             if (recentLogs && recentLogs.length > 0) {
+                // Calculate Stats
                 const errors = recentLogs.filter(l => l.status_code >= 400).length
                 errorRate = parseFloat(((errors / recentLogs.length) * 100).toFixed(1))
 
-                const totalDur = recentLogs.reduce((acc, curr) => acc + (curr.duration_ms || 0), 0)
+                // Fix: Ensure duration_ms is treated as a number
+                const totalDur = recentLogs.reduce((acc, curr) => acc + (Number(curr.duration_ms) || 0), 0)
                 avgLatency = Math.round(totalDur / recentLogs.length)
+
+                // Calculate Chart Data (Client-side binning for now)
+                // Initialize last 24h buckets
+                const now = new Date()
+                const buckets = new Map<string, number>()
+
+                for (let i = 23; i >= 0; i--) {
+                    const timeLabel = format(subHours(now, i), 'HH:00')
+                    buckets.set(timeLabel, 0)
+                }
+
+                recentLogs.forEach(log => {
+                    const logDate = parseISO(log.created_at)
+                    // Only count if within last 24h (though query limit also helps, explicit check is good)
+                    if (logDate >= subHours(now, 24)) {
+                        const timeLabel = format(startOfHour(logDate), 'HH:00')
+                        if (buckets.has(timeLabel)) {
+                            buckets.set(timeLabel, (buckets.get(timeLabel) || 0) + 1)
+                        }
+                    }
+                })
+
+                volumeData = Array.from(buckets.entries()).map(([time, requests]) => ({
+                    time,
+                    requests
+                }))
+            } else {
+                // Empty state for chart
+                const now = new Date()
+                for (let i = 23; i >= 0; i--) {
+                    volumeData.push({
+                        time: format(subHours(now, i), 'HH:00'),
+                        requests: 0
+                    })
+                }
             }
 
             setStats({
@@ -67,7 +111,7 @@ export default function DashboardPage() {
                 errorRate,
                 avgLatency
             })
-            setChartData([])
+            setChartData(volumeData)
             setLoading(false)
         }
 

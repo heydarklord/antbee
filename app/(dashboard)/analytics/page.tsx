@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState } from 'react'
 
+
 export default function AnalyticsPage() {
     const [filterMethod, setFilterMethod] = useState('ALL')
     const [stats, setStats] = useState({
@@ -19,33 +20,19 @@ export default function AnalyticsPage() {
     const [loading, setLoading] = useState(true)
     const supabase = createClient()
 
+    // Refactored Component Logic
+    const [recentLogs, setRecentLogs] = useState<any[]>([])
+
     useEffect(() => {
         const fetchAnalytics = async () => {
             setLoading(true)
 
-            // Check for Mock Mode
-            // @ts-ignore
-            if (supabase.isMock) {
-                setStats({
-                    totalRequests: 8540,
-                    errorRate: 1.2,
-                    avgLatency: 85,
-                    successRate: 98.8
-                })
-                // Mock Chart Data
-                const mockChart = Array.from({ length: 50 }, (_, i) => ({
-                    name: i.toString(),
-                    value: Math.floor(Math.random() * 200) + 50
-                }))
-                setChartData(mockChart)
-                setLoading(false)
-                return
-            }
+
 
             try {
                 let query = supabase
                     .from('request_logs')
-                    .select('status_code, duration_ms, created_at, method')
+                    .select('status_code, duration_ms, created_at, method, body, query_params')
                     .order('created_at', { ascending: false })
                     .limit(1000)
 
@@ -57,13 +44,15 @@ export default function AnalyticsPage() {
 
                 if (error) {
                     console.error("Analytics Fetch Error:", error)
-                    // Don't throw, just show empty states so UI doesn't crash
                 }
 
                 if (logs && logs.length > 0) {
+                    setRecentLogs(logs)
                     const total = logs.length
                     const errors = logs.filter(l => l.status_code >= 400).length
-                    const totalLatency = logs.reduce((acc, curr) => acc + (curr.duration_ms || 0), 0)
+
+                    // FXIED: Number casting
+                    const totalLatency = logs.reduce((acc, curr) => acc + (Number(curr.duration_ms) || 0), 0)
 
                     setStats({
                         totalRequests: total,
@@ -72,14 +61,15 @@ export default function AnalyticsPage() {
                         successRate: parseFloat((((total - errors) / total) * 100).toFixed(2))
                     })
 
-                    // Simple chart data aggregation
-                    const chart = logs.slice(0, 50).reverse().map((l, i) => ({
-                        name: i.toString(),
-                        value: l.duration_ms
+                    // Real Data for Chart: Latency over Time
+                    const chart = logs.slice(0, 50).reverse().map((l) => ({
+                        time: new Date(l.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                        requests: Number(l.duration_ms) || 0
                     }))
                     setChartData(chart)
 
                 } else {
+                    setRecentLogs([])
                     setStats({
                         totalRequests: 0,
                         errorRate: 0,
@@ -98,6 +88,34 @@ export default function AnalyticsPage() {
         fetchAnalytics()
     }, [filterMethod])
 
+    const exportCSV = () => {
+        if (recentLogs.length === 0) return
+
+        const headers = ["ID", "Method", "Status", "Latency (ms)", "Created At", "Query", "Body"]
+        const csvContent = [
+            headers.join(","),
+            ...recentLogs.map(log => [
+                log.id || '',
+                log.method,
+                log.status_code,
+                log.duration_ms,
+                log.created_at,
+                `"${JSON.stringify(log.query_params || {}).replace(/"/g, '""')}"`,
+                `"${JSON.stringify(log.body || {}).replace(/"/g, '""')}"`
+            ].join(","))
+        ].join("\n")
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+        const link = document.createElement("a")
+        const url = URL.createObjectURL(blob)
+        link.setAttribute("href", url)
+        link.setAttribute("download", `analytics_export_${new Date().toISOString()}.csv`)
+        link.style.visibility = 'hidden'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+    }
+
     return (
         <div className="p-8 space-y-8 animate-in">
             <div className="flex items-center justify-between">
@@ -107,7 +125,9 @@ export default function AnalyticsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                     <Button variant="outline">Last 24 Hours</Button>
-                    <Button variant="default"><Download className="mr-2 h-4 w-4" /> Export CSV</Button>
+                    <Button variant="default" onClick={exportCSV} disabled={recentLogs.length === 0}>
+                        <Download className="mr-2 h-4 w-4" /> Export CSV
+                    </Button>
                 </div>
             </div>
 

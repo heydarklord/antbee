@@ -1,4 +1,6 @@
-'use client'
+"use client"
+
+import { toast } from "sonner"
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -18,7 +20,7 @@ import {
 import { ArrowLeft, Play, Plus, X, Check } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { JsonEditor } from '@/components/ui/json-editor'
+import { MonacoEditor } from '@/components/ui/monaco-editor'
 import { ResponseRules } from '@/components/dashboard/response-rules'
 import { RequestLogs } from '@/components/dashboard/request-logs'
 
@@ -118,7 +120,7 @@ export default function EndpointDetailsPage({ params }: { params: Promise<{ id: 
         try {
             bodyJson = JSON.parse(bodyString)
         } catch (e) {
-            alert("Invalid JSON")
+            toast.error("Invalid JSON")
             setIsSaving(false)
             return
         }
@@ -140,15 +142,18 @@ export default function EndpointDetailsPage({ params }: { params: Promise<{ id: 
             const { error } = await supabase.from('endpoint_responses').update(payload).eq('id', response.id)
             if (error) {
                 console.error("Error updating response:", error)
-                alert("Failed to save response: " + error.message)
+                toast.error("Failed to save response: " + error.message)
+            } else {
+                toast.success("Response configuration saved")
             }
         } else {
             const { data, error } = await supabase.from('endpoint_responses').insert(payload).select().single()
             if (error) {
                 console.error("Error creating response:", error)
-                alert("Failed to save response: " + error.message)
+                toast.error("Failed to save response: " + error.message)
             } else if (data) {
                 setResponse(data)
+                toast.success("Response configuration saved")
             }
         }
 
@@ -165,9 +170,9 @@ export default function EndpointDetailsPage({ params }: { params: Promise<{ id: 
             try {
                 const res = await fetch(mockUrl, { method: endpoint.method })
                 const text = await res.text()
-                alert(`Status: ${res.status}\nBody: ${text}`)
+                toast.success(`Status: ${res.status}`, { description: `Body: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}` })
             } catch (e: any) {
-                alert("Request failed: " + e.message)
+                toast.error("Request failed: " + e.message)
             }
         }
     }
@@ -184,7 +189,7 @@ export default function EndpointDetailsPage({ params }: { params: Promise<{ id: 
     }
 
     return (
-        <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden bg-background">
+        <div className="flex flex-col h-full overflow-hidden bg-background">
             {/* Top Bar */}
             <div className="flex items-center justify-between px-6 py-4 border-b bg-card">
                 <div className="flex items-center gap-4">
@@ -214,7 +219,7 @@ export default function EndpointDetailsPage({ params }: { params: Promise<{ id: 
             </div>
 
             {/* Main Content Grid */}
-            <div className="flex-1 grid grid-cols-12 overflow-hidden">
+            <div className="flex-1 grid grid-cols-12 overflow-hidden min-h-0">
                 {/* Left Panel: Configuration */}
                 <div className="col-span-4 border-r bg-muted/10 p-6 overflow-y-auto space-y-6">
 
@@ -350,69 +355,53 @@ export default function EndpointDetailsPage({ params }: { params: Promise<{ id: 
                 </div>
 
                 {/* Right Panel: Editor or Logs */}
-                <div className="col-span-8 flex flex-col h-full bg-[#1e1e1e] border-l border-border/50">
+                <div className="col-span-8 flex flex-col h-full bg-background border-l border-border min-h-0">
                     {/* Tabs */}
-                    <div className="flex items-center justify-between border-b border-white/10 px-4">
+                    <div className="flex items-center justify-between border-b border-border px-4 bg-muted/20">
                         <div className="flex">
                             <button
                                 onClick={() => setActiveTab('body')}
-                                className={`px-4 py-3 text-xs font-medium transition-colors border-b-2 ${activeTab === 'body' ? 'text-white border-primary' : 'text-white/40 border-transparent hover:text-white'}`}
+                                className={`px-4 py-3 text-xs font-medium transition-colors border-b-2 ${activeTab === 'body' ? 'text-foreground border-primary' : 'text-muted-foreground border-transparent hover:text-foreground'}`}
                             >
                                 RESPONSE BODY
                             </button>
                             <button
                                 onClick={() => setActiveTab('logs')}
-                                className={`px-4 py-3 text-xs font-medium transition-colors border-b-2 ${activeTab === 'logs' ? 'text-white border-primary' : 'text-white/40 border-transparent hover:text-white'}`}
+                                className={`px-4 py-3 text-xs font-medium transition-colors border-b-2 ${activeTab === 'logs' ? 'text-foreground border-primary' : 'text-muted-foreground border-transparent hover:text-foreground'}`}
                             >
                                 REQUEST LOGS
                             </button>
                         </div>
                         {activeTab === 'body' && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 text-[10px] text-white/60 hover:text-white hover:bg-white/10"
-                                onClick={() => {
-                                    if (jsonError) {
-                                        alert("Invalid JSON:\n" + jsonError)
-                                        return
-                                    }
-                                    try {
-                                        const parsed = JSON.parse(bodyString)
-                                        setBodyString(JSON.stringify(parsed, null, 2))
-                                    } catch (e: any) {
-                                        alert("Error: " + e.message)
-                                    }
-                                }}
-                            >
-                                Format Code
-                            </Button>
+                            <div className="flex items-center gap-2">
+                                {/* Monaco has built-in formatting (Right Click -> Format Document) */}
+                                <span className="text-[10px] text-muted-foreground">Right click to format</span>
+                            </div>
                         )}
                     </div>
 
                     {/* Content Area */}
-                    <div className="flex-1 relative overflow-hidden min-h-0 bg-[#1e1e1e]">
+                    <div className="flex-1 relative overflow-hidden min-h-0 bg-background">
                         {activeTab === 'body' ? (
-                            <JsonEditor
+                            <MonacoEditor
                                 value={bodyString}
-                                onChange={setBodyString}
-                                className="h-full border-none rounded-none bg-transparent"
-                                error={!!jsonError}
+                                onChange={(val) => setBodyString(val || '')}
+                                className="h-full"
                             />
                         ) : (
-                            <RequestLogs endpointId={id} />
+                            <RequestLogs endpointId={id} endpointPath={endpoint.path} />
                         )}
                     </div>
 
                     {/* Footer - Only for Body */}
                     {activeTab === 'body' && (
-                        <div className="h-8 border-t border-white/10 bg-[#1e1e1e] flex items-center justify-between px-4 text-[10px] text-white/40 font-mono z-20 relative">
+                        <div className="h-8 border-t border-border bg-card flex items-center justify-between px-4 text-[10px] text-muted-foreground font-mono z-20 relative">
                             <div className="flex items-center gap-4">
                                 <span>JSON</span>
                                 <span>UTF-8</span>
                                 {jsonError && <span className="text-red-400 truncate max-w-[300px]" title={jsonError}>{jsonError}</span>}
                             </div>
-                            <div className={`flex items-center gap-2 ${jsonError ? 'text-red-500' : 'text-green-500/80'}`}>
+                            <div className={`flex items-center gap-2 ${jsonError ? 'text-red-500' : 'text-green-500'}`}>
                                 {jsonError ? <X className="h-3 w-3" /> : <Check className="h-3 w-3" />}
                                 {jsonError ? "Invalid JSON" : "Valid JSON"}
                             </div>

@@ -16,12 +16,15 @@ import {
 } from "../ui/select"
 import { Badge } from '@/components/ui/badge'
 
-type Rule = {
+import { BodyRulesEditor } from './body-rules-editor'
+import { toast } from "sonner"
+
+export type Rule = {
     id: string
     condition: {
         type: 'header' | 'query' | 'body'
         key: string
-        operator: 'equals' | 'contains' | 'exists'
+        operator: 'equals' | 'not_equals' | 'contains' | 'exists' | 'deep_equals'
         value: string
     }
     response_id: string
@@ -81,14 +84,12 @@ export function ResponseRules({ endpointId }: { endpointId: string }) {
     }
 
     const saveRules = async () => {
-        // Upsert rules
-        // For simplicity, we just save them individually. Batch would be better.
         let hasError = false
         for (const rule of rules) {
             const payload = {
                 endpoint_id: endpointId,
                 condition: rule.condition,
-                response_id: rule.response_id || null, // null means use default or specific logic?
+                response_id: rule.response_id || null,
                 priority: rule.priority
             }
 
@@ -98,7 +99,6 @@ export function ResponseRules({ endpointId }: { endpointId: string }) {
                     console.error("Error creating rule:", error)
                     hasError = true
                 } else if (data) {
-                    // update local state id
                     rule.id = data.id
                 }
             } else {
@@ -111,9 +111,9 @@ export function ResponseRules({ endpointId }: { endpointId: string }) {
         }
 
         if (hasError) {
-            alert("Some rules failed to save. Check console for details.")
+            toast.error("Some rules failed to save. Check console for details.")
         } else {
-            alert("Rules saved successfully")
+            toast.success("Rules saved successfully")
         }
         fetchRules()
     }
@@ -135,72 +135,93 @@ export function ResponseRules({ endpointId }: { endpointId: string }) {
                     </div>
                 )}
                 {rules.map((rule, i) => (
-                    <div key={rule.id} className="group relative border rounded-md bg-muted/20 p-2 text-xs space-y-2 hover:border-border/80 transition-colors">
-                        <div className="flex items-center gap-2">
-                            <span className="text-[10px] uppercase font-bold text-muted-foreground w-8">If</span>
+                    <div key={rule.id} className="group relative border rounded-md bg-muted/20 p-4 text-sm space-y-3 hover:border-border/80 transition-colors">
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs uppercase font-bold text-muted-foreground w-8">If</span>
 
                             <Select
                                 value={rule.condition.type}
                                 onValueChange={(v: "query" | "header" | "body") => updateRule(i, 'condition.type', v)}
                             >
-                                <SelectTrigger className="h-6 text-[10px] w-20"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="h-8 text-xs w-24"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="query">Query</SelectItem>
                                     <SelectItem value="header">Header</SelectItem>
-                                    <SelectItem value="body">Body</SelectItem>
+                                    <SelectItem value="body">Body (JSON)</SelectItem>
                                 </SelectContent>
                             </Select>
 
-                            <Input
-                                placeholder="Key"
-                                value={rule.condition.key}
-                                onChange={(e) => updateRule(i, 'condition.key', e.target.value)}
-                                className="h-6 text-[10px] flex-1 min-w-0"
-                            />
+                            {/* Generic input for non-body types */}
+                            {rule.condition.type !== 'body' && (
+                                <>
+                                    <Input
+                                        placeholder="Key Name"
+                                        value={rule.condition.key}
+                                        onChange={(e) => updateRule(i, 'condition.key', e.target.value)}
+                                        className="h-8 text-xs flex-1 min-w-0"
+                                    />
+                                    <div className="flex items-center gap-3">
+                                        <Select
+                                            value={rule.condition.operator}
+                                            onValueChange={(v: any) => updateRule(i, 'condition.operator', v)}
+                                        >
+                                            <SelectTrigger className="h-8 text-xs w-[7rem]"><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="equals">Equals</SelectItem>
+                                                <SelectItem value="not_equals">Not Equals</SelectItem>
+                                                <SelectItem value="contains">Contains</SelectItem>
+                                                <SelectItem value="exists">Exists</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        {rule.condition.operator !== 'exists' && (
+                                            <Input
+                                                placeholder="Value"
+                                                value={rule.condition.value}
+                                                onChange={(e) => updateRule(i, 'condition.value', e.target.value)}
+                                                className="h-8 text-xs flex-1 min-w-0"
+                                            />
+                                        )}
+                                    </div>
+                                </>
+                            )}
                         </div>
 
-                        <div className="flex items-center gap-2">
-                            <Select
-                                value={rule.condition.operator}
-                                onValueChange={(v: "equals" | "contains" | "exists") => updateRule(i, 'condition.operator', v)}
-                            >
-                                <SelectTrigger className="h-6 text-[10px] w-[5.5rem]"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="equals">Equals</SelectItem>
-                                    <SelectItem value="contains">Contains</SelectItem>
-                                    <SelectItem value="exists">Exists</SelectItem>
-                                </SelectContent>
-                            </Select>
+                        {/* Dedicated Editor for Body Rules */}
+                        {rule.condition.type === 'body' && (
+                            <BodyRulesEditor
+                                rule={rule}
+                                onChange={(f, v) => updateRule(i, f, v)}
+                            />
+                        )}
 
-                            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/50">
-                                <span className="text-[10px] uppercase font-bold text-muted-foreground w-8">Then</span>
+                        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/50">
+                            <span className="text-xs uppercase font-bold text-muted-foreground w-8">Then</span>
 
-                                <div className="flex items-center gap-2 flex-1">
-                                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">Return Status</span>
-                                    <Input
-                                        placeholder="200"
-                                        value={(rule.condition as any).action_status || ''}
-                                        onChange={(e) => updateRule(i, 'condition.action_status', e.target.value)}
-                                        className="h-6 w-12 text-[10px] font-mono text-center"
-                                    />
-                                    <span className="text-[10px] text-muted-foreground whitespace-nowrap ml-2">Body (JSON)</span>
-                                    <Input
-                                        placeholder='{"msg": "ok"}'
-                                        value={(rule.condition as any).action_body || ''}
-                                        onChange={(e) => updateRule(i, 'condition.action_body', e.target.value)}
-                                        className="h-6 text-[10px] flex-1 min-w-0 font-mono text-green-500"
-                                    />
-                                </div>
-
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
-                                    onClick={() => deleteRule(i)}
-                                >
-                                    <Trash2 className="h-3 w-3" />
-                                </Button>
+                            <div className="flex items-center gap-3 flex-1">
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">Return Status</span>
+                                <Input
+                                    placeholder="200"
+                                    value={(rule.condition as any).action_status || ''}
+                                    onChange={(e) => updateRule(i, 'condition.action_status', e.target.value)}
+                                    className="h-8 w-16 text-xs font-mono text-center"
+                                />
+                                <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">Body (JSON)</span>
+                                <Input
+                                    placeholder='{"msg": "ok"}'
+                                    value={(rule.condition as any).action_body || ''}
+                                    onChange={(e) => updateRule(i, 'condition.action_body', e.target.value)}
+                                    className="h-8 text-xs flex-1 min-w-0 font-mono text-green-500"
+                                />
                             </div>
+
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                                onClick={() => deleteRule(i)}
+                            >
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
                         </div>
                     </div>
                 ))}

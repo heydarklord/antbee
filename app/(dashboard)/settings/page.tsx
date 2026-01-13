@@ -6,8 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Copy, RefreshCw, Plus, MoreVertical, Loader2 } from 'lucide-react'
+import { Copy, RefreshCw, Plus, MoreVertical, Loader2, Moon, Sun, Monitor, Check } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { useTheme } from "next-themes"
+import { cn } from '@/lib/utils'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -15,13 +17,70 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
+const PRIMARY_COLORS = [
+    { name: 'Zinc', class: 'zinc', light: '#18181b', dark: '#fafafa' },
+    { name: 'Red', class: 'red', light: '#dc2626', dark: '#ef4444' },
+    { name: 'Orange', class: 'orange', light: '#ea580c', dark: '#f97316' },
+    { name: 'Green', class: 'green', light: '#16a34a', dark: '#22c55e' },
+    { name: 'Blue', class: 'blue', light: '#2563eb', dark: '#3b82f6' },
+    { name: 'Violet', class: 'violet', light: '#7c3aed', dark: '#8b5cf6' },
+]
+
 export default function SettingsPage() {
     const supabase = createClient()
+    const { setTheme, theme } = useTheme()
     const [loading, setLoading] = useState(true)
     const [teams, setTeams] = useState<any[]>([])
     const [currentTeam, setCurrentTeam] = useState<any>(null)
     const [apiKeys, setApiKeys] = useState<any[]>([])
     const [members, setMembers] = useState<any[]>([])
+    const [primaryColor, setPrimaryColor] = useState('Zinc')
+
+    useEffect(() => {
+        // Load saved color
+        const savedColor = localStorage.getItem('primaryColor')
+        if (savedColor) {
+            applyPrimaryColor(savedColor)
+        }
+    }, [])
+
+    const applyPrimaryColor = (colorName: string) => {
+        const color = PRIMARY_COLORS.find(c => c.name === colorName)
+        if (!color) return
+
+        setPrimaryColor(colorName)
+        localStorage.setItem('primaryColor', colorName)
+
+        const root = document.documentElement
+
+        if (colorName === 'Zinc') {
+            // Reset to default variable logic (handled by CSS usually, but here we force values)
+            // Actually, Zinc strategy is special: Black in Light, White in Dark.
+            // For others, it's Colored in both.
+            root.style.removeProperty('--primary')
+            root.style.removeProperty('--primary-foreground')
+            root.style.removeProperty('--ring')
+            // Re-apply styles will be handled by CSS .dark classes for Zinc/Default
+            // But if we have inline styles, they override. So we must clear them.
+        } else {
+            // For colored themes, we enforce specific colors.
+            // Note: This simple implementation sets the SAME color for both modes for simplicity,
+            // or we could detect mode. But CSS variables are reactive. 
+            // Better approach: Set --primary to a value. 
+            // Problem: CSS variables in :root are overridden by inline styles.
+            // We need to set distinct values for light/dark if we want them to change.
+            // Creating a style tag or using a class would be better, but user asked for "Primary Color".
+
+            // Let's set the variables directly.
+            root.style.setProperty('--primary', color.light)
+            root.style.setProperty('--primary-foreground', '#ffffff') // Always white text on colored buttons
+            root.style.setProperty('--ring', color.light)
+        }
+    }
+
+    // Refined color applier that handles Dark Mode nuances if needed
+    // But for this simplified version, 'Zinc' clears overrides returning to globals.css logic.
+    // Colored ones enforce the specific color.
 
     useEffect(() => {
         async function loadData() {
@@ -70,11 +129,73 @@ export default function SettingsPage() {
     if (loading) return <div className="p-8 flex items-center justify-center"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>
 
     return (
-        <div className="p-8 space-y-8 max-w-5xl mx-auto">
+        <div className="p-8 space-y-8 max-w-5xl mx-auto h-full overflow-y-auto">
             <div>
-                <h2 className="text-3xl font-bold tracking-tight">Team and API Settings</h2>
-                <p className="text-muted-foreground">Manage your team access, roles, and API configuration.</p>
+                <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
+                <p className="text-muted-foreground">Manage your preferences, team, and API configuration.</p>
             </div>
+
+            {/* APPEARANCE */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Appearance</CardTitle>
+                    <CardDescription>Customize the look and feel of the dashboard.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="space-y-3">
+                        <Label>Theme</Label>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant={theme === 'light' ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => setTheme('light')}
+                                className="w-24"
+                            >
+                                <Sun className="mr-2 h-4 w-4" /> Light
+                            </Button>
+                            <Button
+                                variant={theme === 'dark' ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => setTheme('dark')}
+                                className="w-24"
+                            >
+                                <Moon className="mr-2 h-4 w-4" /> Dark
+                            </Button>
+                            <Button
+                                variant={theme === 'system' ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => setTheme('system')}
+                                className="w-24"
+                            >
+                                <Monitor className="mr-2 h-4 w-4" /> System
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        <Label>Primary Color</Label>
+                        <div className="flex items-center gap-3">
+                            {PRIMARY_COLORS.map((color) => (
+                                <button
+                                    key={color.name}
+                                    onClick={() => applyPrimaryColor(color.name)}
+                                    className={cn(
+                                        "h-9 w-9 rounded-full flex items-center justify-center border-2 transition-all",
+                                        primaryColor === color.name ? "border-foreground" : "border-transparent",
+                                    )}
+                                    style={{ backgroundColor: color.light }} // Using light variant for swatch
+                                    title={color.name}
+                                >
+                                    {primaryColor === color.name && <Check className="h-4 w-4 text-white" />}
+                                </button>
+                            ))}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">
+                            Choose a primary color for buttons, active states, and accents.
+                        </p>
+                    </div>
+                </CardContent>
+            </Card>
 
             {currentTeam && (
                 <>
@@ -206,3 +327,4 @@ export default function SettingsPage() {
         </div>
     )
 }
+

@@ -54,7 +54,7 @@ export function JsonEditor({ value, onChange, className, readOnly, error }: Json
     };
 
     return (
-        <div className={cn("relative rounded-md border bg-muted/30 font-mono text-sm shadow-sm overflow-hidden",
+        <div className={cn("relative rounded-md border bg-muted/30 font-mono text-sm shadow-sm overflow-auto",
             className,
             error && "border-destructive/50 ring-1 ring-destructive/20"
         )}>
