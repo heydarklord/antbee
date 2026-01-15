@@ -138,36 +138,80 @@ async function handleRequest(req: NextRequest, paramsPromise: Promise<{ slug: st
     }
 
     // 3. Evaluate Rules
-    let selectedResponse = responses[0] // Default to first one found (ideally we have a is_default flag)
+    let selectedResponse = responses[0]
+    let matchedRuleId: string | null = null
+    let ruleDebugInfo: string | null = null
 
     // Check rules if any
     if (rules && rules.length > 0) {
-        for (const rule of rules) {
+        const hasBodyRules = rules.some((r: any) => r.condition.type === 'body')
+        let requestBodyJson: any = null
+
+        if (hasBodyRules) {
+            try {
+                const clone = req.clone()
+                requestBodyJson = await clone.json()
+            } catch (e) {
+                console.log("[Mock] Body parsing failed:", e)
+                ruleDebugInfo = "BodyParseFailed"
+            }
+        }
+
+        // Evaluate Rules
+        for (let i = 0; i < rules.length; i++) {
+            const rule = rules[i]
             let matched = false
             const { type, key, operator, value } = rule.condition
 
-            // Get actual value from request
-            let actualValue: string | null = null
+            let actualValue: any = null
 
             if (type === 'header') {
                 actualValue = req.headers.get(key)
             } else if (type === 'query') {
                 actualValue = req.nextUrl.searchParams.get(key)
             } else if (type === 'body') {
-                // Parsing body in Next.js Server Components needs care (streams)
-                // For MVP we might skip body rules or try cloning.
-                // Skipped for now to avoid consuming stream if not needed.
+                if (requestBodyJson) {
+                    actualValue = key.split('.').reduce((o: any, k: string) => (o ? o[k] : null), requestBodyJson)
+                }
             }
 
-            if (actualValue !== null) {
-                if (operator === 'equals' && actualValue === value) matched = true
-                else if (operator === 'contains' && actualValue.includes(value)) matched = true
+            // Debug Trace for first rule
+            if (i === 0) {
+                const keys = requestBodyJson ? Object.keys(requestBodyJson).join(',') : 'NoBody'
+                ruleDebugInfo = `Type:${type}|Key:${key}|Val:${actualValue}|Op:${operator}|Target:${value}|Keys:${keys}`
+            }
+
+            if (actualValue !== null && actualValue !== undefined) {
+                const strActual = String(actualValue)
+                const strValue = String(value)
+
+                if (operator === 'equals' && strActual === strValue) matched = true
+                else if (operator === 'not_equals' && strActual !== strValue) matched = true
+                else if (operator === 'contains' && strActual.includes(strValue)) matched = true
                 else if (operator === 'exists') matched = true
+                else if (operator === 'deep_equals') {
+                    try {
+                        const jsonValue = JSON.parse(value)
+                        if (JSON.stringify(actualValue) === JSON.stringify(jsonValue)) matched = true
+                    } catch {
+                        if (strActual === strValue) matched = true
+                    }
+                }
+            } else if (operator === 'not_equals') {
+                // SPECIAL CASE: If field is missing, is it "not equal"?
+                // Usually "Not Equals" implies comparison of two existing values.
+                // But for blocking, "missing" might be considered "not value"? 
+                // Current logic: If missing, ignore rule? 
+                // USER ISSUE: If extraction fails (actualValue is null), we skip this block.
+                // So "null" !== "23" is skipped.
+                // We should probably explicitly handle nulls for not_equals?
+                // Let's ENABLE matching for nulls in not_equals to be safer for blocking rules.
+                matched = true
             }
 
             if (matched) {
-                // Check if rule has inline action (overrides response_id)
-                // We stored it in condition jsonb: { ...condition, action_status, action_body }
+                matchedRuleId = rule.id
+                // ... Action Logic ...
                 const condition = rule.condition as any
                 if (condition.action_status || condition.action_body) {
                     let body = selectedResponse.body
@@ -179,17 +223,14 @@ async function handleRequest(req: NextRequest, paramsPromise: Promise<{ slug: st
                         ...selectedResponse,
                         status_code: condition.action_status ? parseInt(condition.action_status) : selectedResponse.status_code,
                         body: body,
-                        // Maintain other defaults
                     }
-                    break // Win
+                    break
                 }
-
-                // Fallback to response_id linkage
                 if (rule.response_id) {
-                    const target = responses.find(r => r.id === rule.response_id)
+                    const target = responses.find((r: any) => r.id === rule.response_id)
                     if (target) {
                         selectedResponse = target
-                        break // First match wins (sorted by priority)
+                        break
                     }
                 }
             }
@@ -206,6 +247,39 @@ async function handleRequest(req: NextRequest, paramsPromise: Promise<{ slug: st
     const responseBody = selectedResponse.body
     const responseStatus = selectedResponse.status_code || 200
     const responseHeaders = selectedResponse.headers || {}
+
+    // Add Debug Header
+    if (rules) {
+        // @ts-ignore
+        responseHeaders['X-AntBee-Rules-Count'] = rules.length.toString()
+    }
+    if (matchedRuleId) {
+        // @ts-ignore
+        responseHeaders['X-AntBee-Matched-Rule'] = matchedRuleId
+    }
+    if (ruleDebugInfo) {
+        // @ts-ignore
+        responseHeaders['X-AntBee-Rule-Trace'] = ruleDebugInfo
+    }
+
+    // Trace the first rule's evaluation for debugging
+    if (rules && rules.length > 0) {
+        const r = rules[0]
+        const { key, operator, value } = r.condition
+        let extracted = "NULL"
+
+        // Re-extract for header logging (simplified duplication of logic for logging)
+        if (r.condition.type === 'body') {
+            // We use the already parsed requestBodyJson logic scope?
+            // Wait, requestBodyJson is local to the if block above.
+            // I need to lift requestBodyJson scope or capture `actualValue` inside the loop.
+        }
+    }
+
+    // Better: Capture debug info INSIDE the loop for the first rule
+    // See modification in loop below...
+
+    // 5. Async Logging (Fire and forget, or await?)
 
     // 5. Async Logging (Fire and forget, or await?)
     // In serverless, await is safer.

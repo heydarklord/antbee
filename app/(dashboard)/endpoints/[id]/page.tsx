@@ -23,6 +23,7 @@ import { useRouter } from 'next/navigation'
 import { MonacoEditor } from '@/components/ui/monaco-editor'
 import { ResponseRules } from '@/components/dashboard/response-rules'
 import { RequestLogs } from '@/components/dashboard/request-logs'
+import { SchemaValidation } from '@/components/dashboard/schema-validation'
 
 // Types
 type EndpointResponse = {
@@ -42,7 +43,9 @@ export default function EndpointDetailsPage({ params }: { params: Promise<{ id: 
     const [isLoading, setIsLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
     const [jsonError, setJsonError] = useState<string | null>(null)
-    const [activeTab, setActiveTab] = useState<'body' | 'logs'>('body')
+    const [activeTab, setActiveTab] = useState<'body' | 'logs' | 'rules' | 'validation'>('body')
+    const [schemaCode, setSchemaCode] = useState('')
+    const [schemaLanguage, setSchemaLanguage] = useState<'swift' | 'kotlin'>('swift')
     const router = useRouter()
     const supabase = createClient()
 
@@ -191,7 +194,7 @@ export default function EndpointDetailsPage({ params }: { params: Promise<{ id: 
     return (
         <div className="flex flex-col h-full overflow-hidden bg-background">
             {/* Top Bar */}
-            <div className="flex items-center justify-between px-6 py-4 border-b bg-card">
+            <div className="flex items-center justify-between px-6 py-4 border-b bg-card shrink-0">
                 <div className="flex items-center gap-4">
                     <Button variant="ghost" size="icon" asChild>
                         <Link href="/endpoints"><ArrowLeft className="h-4 w-4" /></Link>
@@ -199,17 +202,17 @@ export default function EndpointDetailsPage({ params }: { params: Promise<{ id: 
                     <div>
                         <div className="flex items-center gap-3">
                             <Badge variant={endpoint.method.toLowerCase() as any} className="uppercase px-2 py-0.5 text-xs">{endpoint.method}</Badge>
-                            <h1 className="text-xl font-bold tracking-tight font-mono">{endpoint.path}</h1>
+                            <h1 className="text-xl font-bold tracking-tight font-mono truncate max-w-[200px] md:max-w-md">{endpoint.path}</h1>
                         </div>
-                        <p className="text-muted-foreground text-xs mt-1">Configure the mock response for this endpoint.</p>
+                        <p className="text-muted-foreground text-xs mt-1 hidden md:block">Configure the mock response for this endpoint.</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Button variant="outline" size="sm" onClick={handleTest}>
+                    <Button variant="outline" size="sm" onClick={handleTest} className="hidden md:flex">
                         <Play className="h-4 w-4 mr-2" /> Test Endpoint
                     </Button>
-                    <div className="h-6 w-px bg-border mx-2" />
-                    <Button variant="ghost" size="sm" asChild>
+                    <div className="h-6 w-px bg-border mx-2 hidden md:block" />
+                    <Button variant="ghost" size="sm" asChild className="hidden md:flex">
                         <Link href="/endpoints">Cancel</Link>
                     </Button>
                     <Button size="sm" onClick={handleSave} disabled={isSaving}>
@@ -219,9 +222,9 @@ export default function EndpointDetailsPage({ params }: { params: Promise<{ id: 
             </div>
 
             {/* Main Content Grid */}
-            <div className="flex-1 grid grid-cols-12 overflow-hidden min-h-0">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-12 overflow-y-auto md:overflow-hidden min-h-0">
                 {/* Left Panel: Configuration */}
-                <div className="col-span-4 border-r bg-muted/10 p-6 overflow-y-auto space-y-6">
+                <div className="col-span-1 md:col-span-4 border-r bg-muted/10 p-6 overflow-y-auto space-y-6 md:h-full">
 
                     {/* Response Settings */}
                     <Card className="bg-card shadow-sm border-border/60">
@@ -342,38 +345,40 @@ export default function EndpointDetailsPage({ params }: { params: Promise<{ id: 
                             )}
                         </CardContent>
                     </Card>
-
-                    {/* Rules */}
-                    <Card className="bg-card shadow-sm border-border/60">
-                        <CardHeader className="pb-3">
-                            <CardTitle className="text-sm font-medium">Request Rules</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <ResponseRules endpointId={id} />
-                        </CardContent>
-                    </Card>
                 </div>
 
-                {/* Right Panel: Editor or Logs */}
-                <div className="col-span-8 flex flex-col h-full bg-background border-l border-border min-h-0">
+                {/* Right Panel: Editor or Logs or Rules */}
+                <div className="col-span-1 md:col-span-8 flex flex-col h-[600px] md:h-full bg-background border-t md:border-t-0 md:border-l border-border min-h-0">
                     {/* Tabs */}
-                    <div className="flex items-center justify-between border-b border-border px-4 bg-muted/20">
+                    <div className="flex items-center justify-between border-b border-border px-4 bg-muted/20 overflow-x-auto hide-scrollbar">
                         <div className="flex">
                             <button
                                 onClick={() => setActiveTab('body')}
-                                className={`px-4 py-3 text-xs font-medium transition-colors border-b-2 ${activeTab === 'body' ? 'text-foreground border-primary' : 'text-muted-foreground border-transparent hover:text-foreground'}`}
+                                className={`px-4 py-3 text-xs font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === 'body' ? 'text-foreground border-primary' : 'text-muted-foreground border-transparent hover:text-foreground'}`}
                             >
                                 RESPONSE BODY
                             </button>
                             <button
                                 onClick={() => setActiveTab('logs')}
-                                className={`px-4 py-3 text-xs font-medium transition-colors border-b-2 ${activeTab === 'logs' ? 'text-foreground border-primary' : 'text-muted-foreground border-transparent hover:text-foreground'}`}
+                                className={`px-4 py-3 text-xs font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === 'logs' ? 'text-foreground border-primary' : 'text-muted-foreground border-transparent hover:text-foreground'}`}
                             >
                                 REQUEST LOGS
                             </button>
+                            <button
+                                onClick={() => setActiveTab('rules')}
+                                className={`px-4 py-3 text-xs font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === 'rules' ? 'text-foreground border-primary' : 'text-muted-foreground border-transparent hover:text-foreground'}`}
+                            >
+                                RESPONSE RULES
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('validation')}
+                                className={`px-4 py-3 text-xs font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === 'validation' ? 'text-foreground border-primary' : 'text-muted-foreground border-transparent hover:text-foreground'}`}
+                            >
+                                SCHEMA VALIDATION
+                            </button>
                         </div>
                         {activeTab === 'body' && (
-                            <div className="flex items-center gap-2">
+                            <div className="hidden md:flex items-center gap-2">
                                 {/* Monaco has built-in formatting (Right Click -> Format Document) */}
                                 <span className="text-[10px] text-muted-foreground">Right click to format</span>
                             </div>
@@ -381,21 +386,38 @@ export default function EndpointDetailsPage({ params }: { params: Promise<{ id: 
                     </div>
 
                     {/* Content Area */}
-                    <div className="flex-1 relative overflow-hidden min-h-0 bg-background">
+                    <div className="flex-1 relative overflow-hidden min-h-0 bg-background flex flex-col">
                         {activeTab === 'body' ? (
                             <MonacoEditor
                                 value={bodyString}
                                 onChange={(val) => setBodyString(val || '')}
                                 className="h-full"
                             />
-                        ) : (
+                        ) : activeTab === 'logs' ? (
                             <RequestLogs endpointId={id} endpointPath={endpoint.path} />
-                        )}
+                        ) : activeTab === 'rules' ? (
+                            <div className="p-4 md:p-6 overflow-y-auto h-full">
+                                <ResponseRules endpointId={id} />
+                            </div>
+                        ) : activeTab === 'validation' ? (
+                            <div className="p-4 md:p-6 h-full overflow-hidden">
+                                <SchemaValidation
+                                    jsonBody={(() => {
+                                        try { return JSON.parse(bodyString) }
+                                        catch { return null }
+                                    })()}
+                                    code={schemaCode}
+                                    onCodeChange={setSchemaCode}
+                                    language={schemaLanguage}
+                                    onLanguageChange={setSchemaLanguage}
+                                />
+                            </div>
+                        ) : null}
                     </div>
 
                     {/* Footer - Only for Body */}
                     {activeTab === 'body' && (
-                        <div className="h-8 border-t border-border bg-card flex items-center justify-between px-4 text-[10px] text-muted-foreground font-mono z-20 relative">
+                        <div className="h-8 border-t border-border bg-card flex items-center justify-between px-4 text-[10px] text-muted-foreground font-mono z-20 relative shrink-0">
                             <div className="flex items-center gap-4">
                                 <span>JSON</span>
                                 <span>UTF-8</span>

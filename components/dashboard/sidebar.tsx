@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutGrid, Activity, Network, Settings, LogOut, Hexagon, BarChart3, Terminal, User } from 'lucide-react'
+import { LayoutGrid, Activity, Network, Settings, LogOut, Hexagon, BarChart3, Terminal, User, Sun, Moon } from 'lucide-react'
+import { useTheme } from "next-themes"
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
@@ -17,7 +18,28 @@ const navItems = [
     { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
-export function Sidebar() {
+function ThemeToggle() {
+    const { theme, setTheme } = useTheme()
+    return (
+        <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+        >
+            <Sun className="h-4 w-4 mr-2 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+            <Moon className="absolute h-4 w-4 mr-2 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            <span className="ml-2">Theme</span>
+        </Button>
+    )
+}
+
+interface SidebarProps {
+    className?: string
+    onClose?: () => void
+}
+
+export function Sidebar({ className, onClose }: SidebarProps) {
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
@@ -40,7 +62,7 @@ export function Sidebar() {
     }
 
     return (
-        <div className="flex h-screen w-72 flex-col border-r border-border bg-card/50 backdrop-blur-xl">
+        <div className={cn("flex h-screen w-72 flex-col border-r border-border bg-card/50 backdrop-blur-xl", className)}>
             <div className="flex h-20 items-center px-6 border-b border-border/50">
                 <div className="flex items-center gap-3 font-bold text-xl tracking-tight text-foreground transition-all duration-300 hover:scale-[1.02]">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20">
@@ -59,6 +81,7 @@ export function Sidebar() {
                             <Link
                                 key={item.href}
                                 href={item.href}
+                                onClick={onClose}
                                 className={cn(
                                     "group relative flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 outline-none",
                                     isActive
@@ -83,20 +106,23 @@ export function Sidebar() {
                         <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center border border-border">
                             <User className="h-5 w-5 text-muted-foreground" />
                         </div>
-                        <div className="overflow-hidden">
+                        <div className="overflow-hidden flex-1">
                             <p className="text-sm font-medium truncate">{userEmail || 'Loading...'}</p>
                             <p className="text-xs text-muted-foreground">Free Plan</p>
                         </div>
                     </div>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full justify-start text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                        onClick={handleSignOut}
-                    >
-                        <LogOut className="mr-2 h-4 w-4" />
-                        Sign out
-                    </Button>
+                    <div className="grid grid-cols-2 gap-2">
+                        <ThemeToggle />
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                            onClick={handleSignOut}
+                        >
+                            <LogOut className="mr-2 h-4 w-4" />
+                            Sign out
+                        </Button>
+                    </div>
                 </div>
             </div>
         </div>
