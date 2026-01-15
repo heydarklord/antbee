@@ -220,7 +220,7 @@ export class SchemaValidator {
             return
         }
 
-        log('Enter Scope', pathPrefix || 'root', `Validating properties for ${scopeName}`)
+        log('Enter Scope', pathPrefix || 'root', `Validating properties for ${scopeName}`, 'info')
 
         for (const field of fields) {
             const key = field.jsonKey
