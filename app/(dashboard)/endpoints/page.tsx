@@ -152,7 +152,7 @@ export default function EndpointsPage() {
                     </div>
                     <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                         <DialogTrigger asChild>
-                            <Button className="shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all">
+                            <Button className="shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all" suppressHydrationWarning>
                                 <Plus className="mr-2 h-4 w-4" />
                                 Create Endpoint
                             </Button>

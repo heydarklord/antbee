@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutGrid, Activity, Network, Settings, LogOut, Hexagon, BarChart3, Terminal, User, Sun, Moon } from 'lucide-react'
+import { LayoutGrid, Activity, Network, Settings, LogOut, Hexagon, BarChart3, Terminal, User, Sun, Moon, Braces } from 'lucide-react'
 import { useTheme } from "next-themes"
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -15,6 +15,7 @@ const navItems = [
     { href: '/analytics', label: 'Analytics', icon: BarChart3 },
     { href: '/requests', label: 'Logs', icon: Terminal },
     { href: '/endpoints', label: 'Endpoints', icon: Network },
+    { href: '/gui-editor', label: 'GUI Editor', icon: Braces },
     { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
