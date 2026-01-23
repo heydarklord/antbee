@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/ui/theme-provider"
+import Providers from "@/components/providers"
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -24,14 +25,16 @@ export default function RootLayout({
             ⚠️ CONFIGURATION MISSING: Please add NEXT_PUBLIC_SUPABASE_URL to your .env.local file
           </div>
         )}
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          {children}
-        </ThemeProvider>
+        <Providers>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            {children}
+          </ThemeProvider>
+        </Providers>
         <Toaster />
       </body>
     </html>

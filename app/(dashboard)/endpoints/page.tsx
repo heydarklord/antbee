@@ -1,8 +1,9 @@
 'use client'
 
 import { toast } from "sonner"
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -31,8 +32,23 @@ type Endpoint = {
 }
 
 export default function EndpointsPage() {
-    const [endpoints, setEndpoints] = useState<Endpoint[]>([])
-    const [isLoading, setIsLoading] = useState(true)
+    const supabase = createClient()
+    const { data: endpoints = [], isLoading, refetch: fetchEndpoints } = useQuery({
+        queryKey: ['endpoints'],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from('endpoints')
+                .select('*')
+                .order('created_at', { ascending: false })
+
+            if (error) {
+                console.error("Error fetching endpoints:", error)
+                throw error
+            }
+            return (data as Endpoint[]) || []
+        }
+    })
+
     const [newEndpointName, setNewEndpointName] = useState('')
     const [newEndpointPath, setNewEndpointPath] = useState('')
     const [newEndpointMethod, setNewEndpointMethod] = useState('GET')
@@ -40,24 +56,6 @@ export default function EndpointsPage() {
     const [isCreating, setIsCreating] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [searchQuery, setSearchQuery] = useState('')
-    const supabase = createClient()
-
-    const fetchEndpoints = async () => {
-        setIsLoading(true)
-        const { data, error } = await supabase
-            .from('endpoints')
-            .select('*')
-            .order('created_at', { ascending: false })
-
-        if (data) {
-            setEndpoints(data as Endpoint[])
-        }
-        setIsLoading(false)
-    }
-
-    useEffect(() => {
-        fetchEndpoints()
-    }, [])
 
     const filteredEndpoints = useMemo(() => {
         if (!searchQuery) return endpoints
@@ -130,15 +128,14 @@ export default function EndpointsPage() {
 
     const toggleEndpointStatus = async (id: string, currentStatus: boolean) => {
         await supabase.from('endpoints').update({ is_active: !currentStatus }).eq('id', id)
-        // Optimistic update
-        setEndpoints(prev => prev.map(e => e.id === id ? { ...e, is_active: !currentStatus } : e))
+        await fetchEndpoints()
         toast.success(currentStatus ? "Endpoint paused" : "Endpoint activated")
     }
 
     const handleDelete = async (id: string) => {
         if (!confirm("Are you sure you want to delete this endpoint?")) return
         await supabase.from('endpoints').delete().eq('id', id)
-        setEndpoints(prev => prev.filter(e => e.id !== id))
+        await fetchEndpoints()
         toast.success("Endpoint deleted")
     }
 
