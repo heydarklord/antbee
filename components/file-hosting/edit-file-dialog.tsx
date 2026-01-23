@@ -94,7 +94,7 @@ export function EditFileDialog({ file, open, onOpenChange, onSuccess }: EditFile
                         <Label htmlFor="name" className="text-right">
                             Name
                         </Label>
-                        <Input id="name" value={file?.name} disabled className="col-span-3" />
+                        <Input id="name" value={file?.name || ''} disabled className="col-span-3" />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="mime" className="text-right">

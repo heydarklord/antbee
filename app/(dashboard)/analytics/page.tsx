@@ -5,88 +5,58 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Activity, BarChart3, Clock, AlertTriangle, Download, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 
 
 export default function AnalyticsPage() {
     const [filterMethod, setFilterMethod] = useState('ALL')
-    const [stats, setStats] = useState({
-        totalRequests: 0,
-        errorRate: 0,
-        avgLatency: 0,
-        successRate: 100
-    })
-    const [chartData, setChartData] = useState<any[]>([])
-    const [loading, setLoading] = useState(true)
+
     const supabase = createClient()
 
-    // Refactored Component Logic
-    const [recentLogs, setRecentLogs] = useState<any[]>([])
+    const { data, isLoading: loading } = useQuery({
+        queryKey: ['analytics', filterMethod],
+        queryFn: async () => {
+            let query = supabase
+                .from('request_logs')
+                .select('id, status_code, duration_ms, created_at, method, body, query_params')
+                .order('created_at', { ascending: false })
+                .limit(1000)
 
-    useEffect(() => {
-        const fetchAnalytics = async () => {
-            setLoading(true)
+            if (filterMethod !== 'ALL') {
+                query = query.eq('method', filterMethod)
+            }
 
+            const { data: logs, error } = await query
+            if (error) throw error
 
+            const safeLogs = logs || []
+            const total = safeLogs.length
+            const errors = safeLogs.filter(l => l.status_code >= 400).length
+            const totalLatency = safeLogs.reduce((acc, curr) => acc + (Number(curr.duration_ms) || 0), 0)
 
-            try {
-                let query = supabase
-                    .from('request_logs')
-                    .select('status_code, duration_ms, created_at, method, body, query_params')
-                    .order('created_at', { ascending: false })
-                    .limit(1000)
+            // Chart Data
+            const chart = safeLogs.slice(0, 50).reverse().map((l) => ({
+                time: new Date(l.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                requests: Number(l.duration_ms) || 0
+            }))
 
-                if (filterMethod !== 'ALL') {
-                    query = query.eq('method', filterMethod)
-                }
-
-                const { data: logs, error } = await query
-
-                if (error) {
-                    console.error("Analytics Fetch Error:", error)
-                }
-
-                if (logs && logs.length > 0) {
-                    setRecentLogs(logs)
-                    const total = logs.length
-                    const errors = logs.filter(l => l.status_code >= 400).length
-
-                    // FXIED: Number casting
-                    const totalLatency = logs.reduce((acc, curr) => acc + (Number(curr.duration_ms) || 0), 0)
-
-                    setStats({
-                        totalRequests: total,
-                        errorRate: parseFloat(((errors / total) * 100).toFixed(2)),
-                        avgLatency: Math.round(totalLatency / total),
-                        successRate: parseFloat((((total - errors) / total) * 100).toFixed(2))
-                    })
-
-                    // Real Data for Chart: Latency over Time
-                    const chart = logs.slice(0, 50).reverse().map((l) => ({
-                        time: new Date(l.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                        requests: Number(l.duration_ms) || 0
-                    }))
-                    setChartData(chart)
-
-                } else {
-                    setRecentLogs([])
-                    setStats({
-                        totalRequests: 0,
-                        errorRate: 0,
-                        avgLatency: 0,
-                        successRate: 100
-                    })
-                    setChartData([])
-                }
-            } catch (e) {
-                console.error("Unexpected error:", e)
-            } finally {
-                setLoading(false)
+            return {
+                stats: {
+                    totalRequests: total,
+                    errorRate: total === 0 ? 0 : parseFloat(((errors / total) * 100).toFixed(2)),
+                    avgLatency: total === 0 ? 0 : Math.round(totalLatency / total),
+                    successRate: total === 0 ? 100 : parseFloat((((total - errors) / total) * 100).toFixed(2))
+                },
+                logs: safeLogs,
+                chartData: chart
             }
         }
+    })
 
-        fetchAnalytics()
-    }, [filterMethod])
+    const stats = data?.stats || { totalRequests: 0, errorRate: 0, avgLatency: 0, successRate: 100 }
+    const recentLogs = data?.logs || []
+    const chartData = data?.chartData || []
 
     const exportCSV = () => {
         if (recentLogs.length === 0) return

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
 import { Badge } from '@/components/ui/badge'
 import { Search, RotateCw, Hash, FileJson, Activity, Clock } from 'lucide-react'
@@ -22,38 +23,30 @@ type RequestLog = {
 }
 
 export function RequestInspector() {
-    const [logs, setLogs] = useState<RequestLog[]>([])
     const [selectedLog, setSelectedLog] = useState<RequestLog | null>(null)
-    const [isConnected, setIsConnected] = useState(false)
-    const [errorMsg, setErrorMsg] = useState<string | null>(null)
     const supabase = createClient()
 
-    useEffect(() => {
-        // Initial fetch
-        fetchLogs()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    const { data: logs = [], error, refetch: fetchLogs, isFetching } = useQuery({
+        queryKey: ['request_logs'],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from('request_logs')
+                .select('*, endpoint:endpoints(path)')
+                .order('created_at', { ascending: false })
+                .limit(50)
 
-    const fetchLogs = async () => {
-        const { data, error } = await supabase
-            .from('request_logs')
-            .select('*, endpoint:endpoints(path)')
-            .order('created_at', { ascending: false })
-            .limit(50)
+            if (error) throw error
 
-        if (error) {
-            console.error("Inspector Error:", error)
-            setErrorMsg(error.message)
-        } else if (data) {
-            setErrorMsg(null)
-            const formatted = data.map((log: any) => ({
+            return data.map((log: any) => ({
                 ...log,
                 path: log.endpoint?.path || 'Unknown'
-            }))
-            setLogs(formatted)
-            setIsConnected(true)
-        }
-    }
+            })) as RequestLog[]
+        },
+        refetchInterval: 2000 // Poll every 2s for "live" feel
+    })
+
+    const isConnected = !error && logs.length >= 0
+    const errorMsg = error ? (error as Error).message : null
 
     const getStatusColor = (code: number) => {
         if (code >= 200 && code < 300) return "text-green-500"
@@ -101,10 +94,10 @@ export function RequestInspector() {
                 <div className="p-3 border-b border-border bg-card">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <div className={cn("h-2 w-2 rounded-full", isConnected ? "bg-green-500 animate-pulse" : "bg-yellow-500")} />
+                            <div className={cn("h-2 w-2 rounded-full", isConnected ? "bg-green-500 animate-pulse" : "bg-red-500")} />
                             <span className="text-xs font-medium text-foreground">Live Traffic</span>
                         </div>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-muted" onClick={fetchLogs}>
+                        <Button variant="ghost" size="icon" className={cn("h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-muted", isFetching && "animate-spin")} onClick={() => fetchLogs()}>
                             <RotateCw className="h-3 w-3" />
                         </Button>
                     </div>

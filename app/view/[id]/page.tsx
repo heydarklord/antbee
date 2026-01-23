@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { ViewClient } from './view-client'
 import { AlertCircle } from 'lucide-react'
@@ -9,7 +9,7 @@ interface PageProps {
 
 export default async function ViewFilePage({ params }: PageProps) {
     const { id } = await params
-    const supabase = createAdminClient()
+    const supabase = await createClient()
 
     // Fetch metadata securely (bypassing RLS so properly public)
     const { data: fileData, error } = await supabase
