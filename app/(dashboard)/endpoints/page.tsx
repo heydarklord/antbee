@@ -21,6 +21,7 @@ import {
 import { Label } from '@/components/ui/label'
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
+import { DeleteConfirmDialog } from '@/components/delete-confirm-dialog'
 
 type Endpoint = {
     id: string
@@ -132,11 +133,13 @@ export default function EndpointsPage() {
         toast.success(currentStatus ? "Endpoint paused" : "Endpoint activated")
     }
 
+    const [deleteId, setDeleteId] = useState<string | null>(null)
+
     const handleDelete = async (id: string) => {
-        if (!confirm("Are you sure you want to delete this endpoint?")) return
         await supabase.from('endpoints').delete().eq('id', id)
         await fetchEndpoints()
         toast.success("Endpoint deleted")
+        setDeleteId(null)
     }
 
     return (
@@ -335,7 +338,7 @@ export default function EndpointsPage() {
                                                         variant="ghost"
                                                         size="icon"
                                                         className="h-8 w-8 hover:bg-red-500/20 hover:text-red-400 text-muted-foreground"
-                                                        onClick={() => handleDelete(endpoint.id)}
+                                                        onClick={() => setDeleteId(endpoint.id)}
                                                         title="Delete Endpoint"
                                                     >
                                                         <Trash2 className="h-4 w-4" />
@@ -350,6 +353,13 @@ export default function EndpointsPage() {
                     </div>
                 </div>
             </div>
-        </div>
+            <DeleteConfirmDialog
+                open={!!deleteId}
+                onOpenChange={(open) => !open && setDeleteId(null)}
+                onConfirm={() => deleteId && handleDelete(deleteId)}
+                title="Delete Endpoint"
+                description="Are you sure you want to delete this endpoint? This action cannot be undone."
+            />
+        </div >
     )
 }

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { EXPIRY_OPTIONS, ExpiryType, calculateExpiryDate } from '@/lib/file-hosting'
 import { Upload, X, File as FileIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 export default function UploadPage() {
@@ -20,6 +21,7 @@ export default function UploadPage() {
     const [mimeType, setMimeType] = useState('')
     const inputRef = useRef<HTMLInputElement>(null)
     const supabase = createClient()
+    const queryClient = useQueryClient()
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -74,6 +76,7 @@ export default function UploadPage() {
             if (dbError) throw dbError
 
             toast.success('File uploaded successfully')
+            await queryClient.invalidateQueries({ queryKey: ['hosted_files'] })
             router.push('/files')
         } catch (error: any) {
             console.error('Upload error:', error)

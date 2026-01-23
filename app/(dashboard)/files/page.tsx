@@ -12,6 +12,7 @@ import { formatFileSize, getExpiryLabel } from '@/lib/file-hosting'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { EditFileDialog } from '@/components/file-hosting/edit-file-dialog'
+import { DeleteConfirmDialog } from '@/components/delete-confirm-dialog'
 
 interface HostedFile {
     id: string
@@ -49,9 +50,13 @@ export default function FilesPage() {
         }
     })
 
-    const handleDelete = async (id: string, storagePath: string) => {
-        if (!confirm('Are you sure you want to delete this file?')) return
+    const [deleteState, setDeleteState] = useState<{ id: string, storagePath: string } | null>(null)
 
+    const handleDelete = (id: string, storagePath: string) => {
+        setDeleteState({ id, storagePath })
+    }
+
+    const confirmDelete = async (id: string, storagePath: string) => {
         try {
             // Delete from Storage
             const { error: storageError } = await supabase
@@ -73,6 +78,7 @@ export default function FilesPage() {
 
             toast.success('File deleted successfully')
             fetchFiles()
+            setDeleteState(null)
         } catch (error) {
             console.error('Error deleting file:', error)
             toast.error('Failed to delete file')
@@ -192,6 +198,14 @@ export default function FilesPage() {
                 open={!!editingFile}
                 onOpenChange={(open) => !open && setEditingFile(null)}
                 onSuccess={fetchFiles}
+            />
+
+            <DeleteConfirmDialog
+                open={!!deleteState}
+                onOpenChange={(open) => !open && setDeleteState(null)}
+                onConfirm={() => deleteState && confirmDelete(deleteState.id, deleteState.storagePath)}
+                title="Delete File"
+                description="Are you sure you want to delete this file? This action cannot be undone."
             />
         </div>
     )
