@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 interface ImportEndpointModalProps {
     open: boolean
     onOpenChange: (open: boolean) => void
-    onImport: (payload: string) => void
+    onImport: (payload: string, endpoint?: any) => void
 }
 
 export function ImportEndpointModal({ open, onOpenChange, onImport }: ImportEndpointModalProps) {
@@ -70,14 +70,14 @@ export function ImportEndpointModal({ open, onOpenChange, onImport }: ImportEndp
                 } else {
                     payload = JSON.stringify(payload, null, 2)
                 }
-                onImport(payload)
+                onImport(payload, selectedEndpoint)
             } else {
                 // Fallback if no response found
                 const fallback = {
                     message: "No response configured for this endpoint yet.",
                     endpoint: selectedEndpoint.path
                 }
-                onImport(JSON.stringify(fallback, null, 2))
+                onImport(JSON.stringify(fallback, null, 2), selectedEndpoint)
             }
         } catch (err) {
             console.error("Failed to import", err)

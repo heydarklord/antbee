@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { MonacoEditor } from '@/components/ui/monaco-editor'
-import { ArrowLeftRight, CheckCircle2, AlertTriangle, Save, RefreshCw, Upload, Download, Split, Columns, PanelLeft, FileJson, X } from 'lucide-react'
+import { ArrowLeftRight, CheckCircle2, AlertTriangle, Save, RefreshCw, Upload, Download, Split, Columns, PanelLeft, FileJson, X, Network } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { VisualJsonEditor } from '@/components/gui-editor/visual-json-editor'
 import { ImportEndpointModal } from '@/components/gui-editor/import-modal'
@@ -35,6 +35,11 @@ export default function GuiEditorPage() {
     const [isImportOpen, setIsImportOpen] = useState(false)
     const [diffMode, setDiffMode] = useState(false) // Patch mode
 
+    const [targetEndpoint, setTargetEndpoint] = useState<any>(null)
+    const [syncToEndpoint, setSyncToEndpoint] = useState(false)
+    const [isSaving, setIsSaving] = useState(false)
+    const supabase = createClient()
+
     // Check validity on change
     useEffect(() => {
         try {
@@ -51,10 +56,79 @@ export default function GuiEditorPage() {
         setJsonString(JSON.stringify(newJson, null, 2))
     }
 
-    const handleImport = (payload: string) => {
+    const handleImport = (payload: string, endpoint?: any) => {
         setJsonString(JSON.stringify(JSON.parse(payload), null, 2)) // Re-format
-        toast.success("Payload imported successfully")
+        if (endpoint) {
+            setTargetEndpoint(endpoint)
+            setSyncToEndpoint(true)
+            toast.success(`Imported from ${endpoint.path}`)
+        } else {
+            toast.success("Payload imported successfully")
+        }
         setIsImportOpen(false)
+    }
+
+    const handleSave = async () => {
+        if (!isValid) {
+            toast.error("Cannot save invalid JSON")
+            return
+        }
+
+        const jsonBody = JSON.parse(jsonString)
+
+        if (syncToEndpoint && targetEndpoint) {
+            // Save to Endpoint
+            setIsSaving(true)
+            try {
+                // Check if response exists
+                const { data: existingResponses } = await supabase
+                    .from('endpoint_responses')
+                    .select('id')
+                    .eq('endpoint_id', targetEndpoint.id)
+                    .limit(1)
+
+                if (existingResponses && existingResponses.length > 0) {
+                    // Update existing
+                    const { error } = await supabase
+                        .from('endpoint_responses')
+                        .update({ body: jsonBody })
+                        .eq('id', existingResponses[0].id)
+
+                    if (error) throw error
+                } else {
+                    // Create new
+                    const { error } = await supabase
+                        .from('endpoint_responses')
+                        .insert({
+                            endpoint_id: targetEndpoint.id,
+                            status_code: 200,
+                            body: jsonBody,
+                            headers: { "Content-Type": "application/json" }
+                        })
+
+                    if (error) throw error
+                }
+
+                toast.success(`Updated endpoint ${targetEndpoint.path}`)
+            } catch (e: any) {
+                console.error(e)
+                toast.error("Failed to save to endpoint: " + e.message)
+            } finally {
+                setIsSaving(false)
+            }
+        } else {
+            // Download File
+            const blob = new Blob([jsonString], { type: 'application/json' })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = targetEndpoint ? `${targetEndpoint.path.replace(/\//g, '_')}_response.json` : 'payload.json'
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+            toast.success("File downloaded")
+        }
     }
 
     const parsedData = useMemo(() => {
@@ -114,18 +188,37 @@ export default function GuiEditorPage() {
 
                 <div className="flex items-center gap-2">
                     {/* Patch Mode Toggle (Visual Only for now) */}
-                    <div className="flex items-center gap-2 mr-4 opacity-0 md:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-2 mr-2 opacity-0 md:opacity-100 transition-opacity">
                         <Label htmlFor="patch-mode" className="text-xs text-muted-foreground font-medium cursor-pointer">Patch Mode</Label>
                         <Switch id="patch-mode" checked={diffMode} onCheckedChange={setDiffMode} className="scale-75" />
                     </div>
+
+                    {/* Sync Toggle */}
+                    {targetEndpoint && (
+                        <div className="flex items-center gap-2 mr-2 bg-primary/10 px-3 py-1 rounded-full border border-primary/20 animate-in fade-in slide-in-from-top-1">
+                            <Label htmlFor="sync-mode" className="text-xs text-primary font-medium cursor-pointer flex items-center gap-1.5">
+                                <Network className="h-3 w-3" />
+                                Sync to {targetEndpoint.path}
+                            </Label>
+                            <Switch id="sync-mode" checked={syncToEndpoint} onCheckedChange={setSyncToEndpoint} className="scale-75 data-[state=checked]:bg-primary" />
+                        </div>
+                    )}
 
                     <Button variant="outline" size="sm" onClick={() => setIsImportOpen(true)} className="h-8 gap-2 border-border/60 hover:bg-muted">
                         <Download className="h-3.5 w-3.5" />
                         <span className="hidden sm:inline">Import</span>
                     </Button>
-                    <Button size="sm" className="h-8 gap-2" onClick={() => toast.success("Payload saved locally")}>
-                        <Save className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Save Payload</span>
+                    <Button size="sm" className="h-8 gap-2 min-w-[100px]" onClick={handleSave} disabled={!isValid || isSaving}>
+                        {isSaving ? (
+                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        ) : syncToEndpoint && targetEndpoint ? (
+                            <Upload className="h-3.5 w-3.5" />
+                        ) : (
+                            <Save className="h-3.5 w-3.5" />
+                        )}
+                        <span className="hidden sm:inline">
+                            {isSaving ? "Saving..." : syncToEndpoint && targetEndpoint ? "Update Endpoint" : "Download JSON"}
+                        </span>
                     </Button>
                 </div>
             </div>
